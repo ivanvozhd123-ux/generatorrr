@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Генератор номеров</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="theme-dark">
+  <header><button id="menuBtn" class="icon">☰</button><h1>ГЕНЕРАТОР <i>НОМЕРОВ</i></h1><div class="balances"><span>₽ <b id="rubles">0</b></span><span>$ <b id="dollars">0</b></span></div><div class="level">LVL <b id="level">1</b><div class="xp"><i id="xpBar"></i></div></div><button class="icon" data-nav="settings">⚙</button></header>
+  <aside id="nav"><div class="brand">№ RNG <small>collection simulator</small></div>
+    <button class="active" data-nav="home">⌂ <span data-t="home">Главная</span></button><button data-nav="collection">▦ <span data-t="collection">Коллекция</span></button><button data-nav="vault">🔒 <span data-t="vault">Сейф</span></button><button data-nav="upgrades">⬆ <span data-t="upgrades">Улучшения</span></button><button data-nav="rarities">✦ <span data-t="rarities">Редкости</span></button><button data-nav="quests">✓ <span data-t="quests">Задания</span></button><button data-nav="achievements">★ <span data-t="achievements">Достижения</span></button><button data-nav="countries">◎ <span data-t="countries">Страны</span></button><button data-nav="stats">▥ <span data-t="stats">Статистика</span></button><button data-nav="settings">⚙ <span data-t="settings">Настройки</span></button>
+  </aside>
+  <main>
+    <section id="home" class="page active"><div class="hero card"><div><p class="eyebrow">ГЕНЕРАТОР</p><h2>Найдите свой идеальный номер</h2><p>Каждое вращение — шанс получить предмет для истории вашей коллекции.</p></div><div class="capacity">КОЛЛЕКЦИЯ <b id="capacity">0 / 0</b></div></div>
+      <div class="generator card"><div class="selectors"><label>Страна<select id="country"></select></label><label>Регион<select id="region"></select></label><label>Категория<select id="plateType"></select></label></div><div class="rollbox"><div><span>СТОИМОСТЬ БРОСКА</span><strong id="rollCost">0 ₽</strong></div><button id="rollBtn" class="primary">ВЫБИТЬ НОМЕР <small>⌘ / Space</small></button></div></div>
+      <div class="homegrid"><article class="card latest"><h3>Последняя находка</h3><div id="lastDrop" class="empty">Ваш первый номер уже ждёт.</div></article><article class="card"><h3>Вероятности</h3><div id="chanceList" class="chances"></div></article><article class="card"><h3>Активные задания</h3><div id="questPreview"></div><button class="link" data-nav="quests">Все задания →</button></article><article class="card"><h3>Журнал событий</h3><div id="eventLog" class="eventlog"></div></article></div>
+    </section>
+    <section id="collection" class="page"><div class="pagehead"><div><p class="eyebrow">ИНВЕНТАРЬ</p><h2>Коллекция <span id="colCount"></span></h2></div><div><button id="sellSelected" class="danger">Продать выбранное</button><button id="selectAll">Выбрать все</button></div></div><div id="collectionGrid" class="plategrid"></div></section>
+    <section id="vault" class="page"><div class="pagehead"><div><p class="eyebrow">ЗАЩИЩЁННОЕ ХРАНИЛИЩЕ</p><h2>Сейф <span id="vaultCount"></span></h2></div></div><div id="vaultGrid" class="plategrid"></div></section>
+    <section id="upgrades" class="page"><p class="eyebrow">ИНВЕСТИЦИИ</p><h2>Улучшения</h2><div id="upgradeList" class="upgradegrid"></div></section>
+    <section id="rarities" class="page"><p class="eyebrow">КАТАЛОГ</p><h2>Редкости</h2><div id="rarityList" class="raritygrid"></div></section>
+    <section id="quests" class="page"><p class="eyebrow">ЕЖЕДНЕВНАЯ РУТИНА</p><h2>Задания <button id="dailyClaim" class="primary small">Забрать ежедневную награду</button></h2><p id="dailyHint"></p><div id="questList" class="questgrid"></div></section>
+    <section id="achievements" class="page"><p class="eyebrow">ПУТЬ КОЛЛЕКЦИОНЕРА</p><h2>Достижения</h2><div id="achievementList" class="achievementgrid"></div></section>
+    <section id="countries" class="page"><p class="eyebrow">МИР НОМЕРНЫХ ЗНАКОВ</p><h2>Страны</h2><div id="countryList" class="countrygrid"></div></section>
+    <section id="stats" class="page"><p class="eyebrow">ВАША ИСТОРИЯ</p><h2>Статистика</h2><div id="statsGrid" class="statsgrid"></div></section>
+    <section id="settings" class="page"><p class="eyebrow">ПАРАМЕТРЫ</p><h2>Настройки</h2><div class="settings card"><label>Язык<select id="language"><option value="ru">Русский</option><option value="en">English</option></select></label><label>Тема<select id="theme"><option value="dark">Тёмная</option><option value="light">Светлая</option><option value="blue">Синяя</option><option value="gold">Золотая</option></select></label><label>Громкость<input id="volume" type="range" min="0" max="100"></label><label><input id="sound" type="checkbox"> Звуки интерфейса</label><label><input id="animations" type="checkbox"> Анимации</label><label><input id="reduced" type="checkbox"> Уменьшенные эффекты</label><label><input id="confirmRare" type="checkbox"> Подтверждать продажу редких</label><button id="resetTutorial">Показать обучение снова</button><button id="clearLog">Очистить журнал</button><button id="newGame" class="danger">Начать новую игру</button><p>Версия игры 1.0.0 · Все цены виртуальные.</p></div></section>
+  </main>
+</div>
+<div id="toast"></div><div id="modal" class="modal"><div class="modalbox"><button class="close">×</button><div id="modalContent"></div></div></div>
+<div id="rareReveal" class="rareReveal"><div id="revealContent"></div></div>
+<div id="tutorial" class="modal"><div class="modalbox tutorial"><h2>Добро пожаловать в «Генератор номеров»</h2><p>Выбирайте страну, регион и тип номера, выбивайте находки за рубли, сохраняйте лучшие в сейфе и продавайте лишнее. Задания, достижения и улучшения помогут развиваться.</p><button id="tutorialClose" class="primary">Начать коллекцию</button></div></div>
+<script src="script.js"></script>
+</body></html>

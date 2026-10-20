@@ -7,3 +7,258 @@
 .platecard{overflow:visible;min-height:205px;padding-bottom:19px}.platecard small{display:block;min-height:32px;line-height:1.4}.plateactions{margin-top:14px;padding-bottom:2px}.plateactions button{min-height:34px}
 body{overflow-x:hidden}header{height:82px;background:transparent;border:0;padding:0 max(22px,calc((100vw - 900px)/2));gap:14px}header h1{display:none}.hamburger{width:58px;height:58px;border:1px solid #72747c;border-radius:18px;background:linear-gradient(145deg,#292a32,#17181f);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 16px #0004}.hamburger span{height:4px;width:30px;background:#a8a9ad;border-radius:3px}.balances{margin-left:auto;gap:8px}.balances span{font-size:20px;border:0;background:#20212a;padding:12px 17px;border-radius:28px;color:#a4a3b2}.balances span:first-child{color:#a4a3b2}.balances b{color:inherit}.level{display:none}header>.icon[data-nav=settings]{display:none}aside{z-index:12;top:0;left:0;bottom:0;width:min(340px,88vw);padding:25px 18px;background:#171820;border:0;box-shadow:12px 0 50px #0009;transform:translateX(-110%);transition:transform .35s cubic-bezier(.2,.8,.2,1);overflow:auto}aside.open{transform:translateX(0)}.drawer-scrim{position:fixed;inset:0;background:#0009;z-index:11;opacity:0;visibility:hidden;transition:.3s}.drawer-scrim:has(+aside.open){opacity:1;visibility:visible}aside button{padding:13px 14px;font-size:15px;border-radius:12px}.drawer-pickers{padding:12px;background:#20212a;border-radius:14px;margin:10px 0 17px;display:grid;gap:10px}.drawer-pickers label{color:#9ca2af;font-size:12px;display:grid;gap:5px}.drawer-cost{display:flex;justify-content:space-between;color:#9ca2af;padding:3px 2px}.drawer-cost b{color:#f0c45f}main{margin:0 auto;padding:0;max-width:none;width:100%}#home{min-height:100svh}.roll-stage{--glow:#32ca72;position:relative;min-height:100svh;padding:110px 18px 96px;display:flex;flex-direction:column;align-items:center;justify-content:center;isolation:isolate;background:radial-gradient(ellipse at 50% 56%,color-mix(in srgb,var(--glow) 29%,transparent) 0,transparent 48%),radial-gradient(ellipse at 50% 100%,#1a2320 0,transparent 63%);transition:background .6s}.stage-rarity{order:1;color:#58d47d;font-weight:800;font-size:20px;letter-spacing:.05em;text-align:center;margin:10px 0 2px;animation:rise .45s both}.stage-value{order:2;font-size:clamp(25px,6vw,38px);font-weight:800;letter-spacing:.02em;margin:0 0 22px;color:var(--glow);animation:valuePop .45s both}.stage-plate{order:3;width:min(720px,92vw);min-height:170px;display:flex;align-items:center;justify-content:center;perspective:900px}.stage-plate>.platevisual{margin:0!important}.stage-plate .plate-xl{width:100%}.stage-placeholder{text-align:center;color:#717984;font-size:17px;line-height:1.7;animation:breathe 2.5s ease-in-out infinite}.stage-description{order:4;color:#b2b2bc;font-size:clamp(15px,3vw,22px);margin:24px 0;text-align:center;animation:fadeSoft .5s both}.stage-roll{order:5;min-width:205px;padding:14px 25px;border-radius:28px;box-shadow:0 9px 28px color-mix(in srgb,var(--glow) 28%,transparent);background:linear-gradient(135deg,#46d477,#16984e);color:white;letter-spacing:.08em;transition:transform .16s,filter .2s;animation:rise .5s both}.stage-roll:active{transform:scale(.94)}.stage-bottom{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;white-space:nowrap}.stage-country,.stage-capacity{background:#20212a;color:#a3a2ad;border-radius:20px;padding:14px 18px;font-size:16px;box-shadow:0 8px 22px #0003}.stage-capacity{font-size:12px;padding:10px 12px;display:none}.home-details{max-width:760px;margin:0 auto;padding:30px 15px 50px}.home-details .card{box-shadow:none}.realplate{box-shadow:0 2px 0 #fff inset,0 18px 32px #0008,0 0 38px color-mix(in srgb,var(--glow,#32ca72) 37%,transparent)!important}.plate-xl{animation:plateEnter .62s cubic-bezier(.16,1,.3,1) both}.stage-rarity,.stage-value{min-height:1.25em}.reveal .plate-xl{box-shadow:0 0 52px color-mix(in srgb,var(--rarity) 56%,transparent),0 18px 35px #0009!important}.rareReveal .reveal-status{margin-top:20px}.rareReveal .desc{max-width:620px;margin:12px auto;color:#c9ced9;font-size:18px}.rareReveal .value{font-size:clamp(26px,7vw,42px);color:var(--rarity);margin-top:20px}.rareReveal .skip{font-size:12px;color:#a4aabb}.homegrid .card{backdrop-filter:blur(10px)}@keyframes plateEnter{0%{opacity:0;transform:translateY(38px) rotateX(18deg) scale(.92);filter:brightness(.55)}55%{filter:brightness(1.3)}100%{opacity:1;transform:none;filter:brightness(1)}}@keyframes valuePop{0%{opacity:0;transform:translateY(-10px) scale(.8)}100%{opacity:1;transform:none}}@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}@keyframes fadeSoft{from{opacity:0}to{opacity:1}}@keyframes breathe{50%{opacity:.55}}@media(max-width:600px){header{height:75px;padding:0 16px}.hamburger{width:48px;height:48px;border-radius:15px}.hamburger span{width:25px}.balances span{font-size:16px;padding:10px 13px}.roll-stage{padding:96px 14px 88px}.stage-plate{min-height:112px}.stage-plate .plate-xl{min-height:112px!important}.stage-plate .plate-main{font-size:clamp(38px,11vw,68px)}.stage-plate .plate-region{min-width:62px;width:25%}.stage-plate .plate-region b{font-size:clamp(30px,8vw,52px)}.stage-plate .plate-region em{font-size:11px}.stage-plate .flag-ru{width:35px;height:12px}.stage-rarity{font-size:17px}.stage-value{font-size:29px;margin-bottom:16px}.stage-description{font-size:16px;margin:17px 0}.stage-country{font-size:15px;padding:12px 17px}.stage-bottom{bottom:18px}.home-details{padding-bottom:28px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 #rareReveal{position:fixed!important;inset:0!important;z-index:99999!important;background:#050608!important;opacity:1!important;visibility:hidden;isolation:isolate;transform:none!important;filter:none!important;mix-blend-mode:normal!important;backdrop-filter:none!important;contain:paint}#rareReveal.show{display:flex!important;visibility:visible!important;opacity:1!important}#rareReveal::before,#rareReveal::after{content:none!important;display:none!important}#revealContent{position:relative;z-index:1;opacity:1;visibility:visible;transform:none;filter:none;mix-blend-mode:normal}.rareReveal .reveal-features{list-style:none;margin:8px auto 0;padding:0;color:#aeb7c5;font-size:13px}.rareReveal .reveal-features li{margin:4px 0}.rareReveal .reveal-features.hidden{display:none}
+
+
+/* ===== Российская табличка типа 1: масштабируется по пропорциям 520 × 112 мм ===== */
+.platevisual.realplate {
+  --plate-ratio: 4.6428571429; /* 520 / 112 */
+  container-type: inline-size;
+  position: relative !important;
+  display: flex !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  aspect-ratio: 520 / 112 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 2px solid #141414 !important;
+  border-radius: 5px !important;
+  background: #f8f8f6 !important;
+  color: #080808 !important;
+  box-shadow: inset 0 0 0 1px #fff, 0 1px 2px #0002 !important;
+  text-shadow: none !important;
+  isolation: isolate;
+  line-height: 1 !important;
+}
+
+/* Две монтажные точки около краёв — позиционируются относительно всей таблички. */
+.platevisual.realplate::before,
+.platevisual.realplate::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  z-index: 5 !important;
+  top: 50% !important;
+  width: 1.75cqw !important;
+  height: 1.75cqw !important;
+  min-width: 3px !important;
+  min-height: 3px !important;
+  max-width: 7px !important;
+  max-height: 7px !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: #171717 !important;
+  box-shadow: 0 0 0 0.35cqw #fff !important;
+  transform: translateY(-50%) !important;
+  pointer-events: none !important;
+  inset-block: auto !important;
+}
+.platevisual.realplate::before { left: 1.9cqw !important; right: auto !important; }
+.platevisual.realplate::after  { right: 1.9cqw !important; left: auto !important; }
+
+/* Левая часть: буква + три цифры + две буквы, с реальными пропорциями знака. */
+.platevisual.realplate .plate-main {
+  position: relative !important;
+  z-index: 1 !important;
+  box-sizing: border-box !important;
+  flex: 1 1 74.8% !important;
+  width: 74.8% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 1.15cqw !important;
+  padding: 0 1.5cqw 0 4.1cqw !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  color: #080808 !important;
+  font-family: "DIN 1451 Mittelschrift", "Road Numbers", "DIN Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "DejaVu Sans Condensed", Arial, sans-serif !important;
+  font-size: 19.2cqw !important;
+  font-weight: 900 !important;
+  font-stretch: condensed !important;
+  line-height: .95 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  transform: none !important;
+}
+.platevisual.realplate .plate-series-first,
+.platevisual.realplate .plate-series-end,
+.platevisual.realplate .plate-digits,
+.platevisual.realplate .plate-main-text {
+  display: inline-block !important;
+  flex: 0 0 auto !important;
+  color: #080808 !important;
+  font: inherit !important;
+  line-height: .95 !important;
+  text-shadow: 0 .15cqw 0 #777 !important;
+}
+.platevisual.realplate .plate-series-first { margin-right: .15cqw; }
+.platevisual.realplate .plate-digits { letter-spacing: -.035em !important; }
+.platevisual.realplate .plate-series-end { letter-spacing: -.035em !important; }
+.platevisual.realplate .plate-main-text { max-width: 100%; overflow: hidden; text-overflow: clip; }
+
+/* Правая площадка занимает примерно четверть ширины знака. */
+.platevisual.realplate .plate-region {
+  position: relative !important;
+  z-index: 2 !important;
+  box-sizing: border-box !important;
+  flex: 0 0 25.2% !important;
+  width: 25.2% !important;
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: .35cqw !important;
+  margin: 0 !important;
+  padding: 1cqw 1.5cqw !important;
+  border: 0 !important;
+  border-left: .65cqw solid #171717 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #080808 !important;
+}
+.platevisual.realplate .plate-region b {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: #080808 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 12.8cqw !important;
+  font-weight: 800 !important;
+  line-height: .9 !important;
+  letter-spacing: .015em !important;
+  white-space: nowrap !important;
+}
+.platevisual.realplate .plate-region em {
+  display: block !important;
+  margin: .05cqw 0 0 !important;
+  padding: 0 !important;
+  color: #080808 !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 3.8cqw !important;
+  font-style: normal !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: .055em !important;
+}
+.platevisual.realplate .flag-ru {
+  display: block !important;
+  flex: 0 0 auto !important;
+  width: 8.3cqw !important;
+  height: 2.75cqw !important;
+  min-width: 15px !important;
+  min-height: 5px !important;
+  max-width: 54px !important;
+  max-height: 18px !important;
+  margin: .35cqw 0 0 !important;
+  padding: 0 !important;
+  border: .25cqw solid #777 !important;
+  border-radius: 0 !important;
+  background: linear-gradient(to bottom, #fff 0 33.333%, #2455a4 33.333% 66.666%, #d52b32 66.666% 100%) !important;
+}
+
+/* Маленькие копии в коллекции сохраняют те же пропорции и геометрию. */
+.platecard .platevisual.realplate {
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 520 / 112 !important;
+  min-height: 0 !important;
+  margin: 9px 0 !important;
+  border-width: 1.5px !important;
+}
+.platecard .platevisual.realplate .plate-main {
+  font-size: 19.2cqw !important;
+  padding: 0 1.5cqw 0 4.1cqw !important;
+  gap: 1.15cqw !important;
+}
+.platecard .platevisual.realplate .plate-region {
+  flex-basis: 25.2% !important;
+  width: 25.2% !important;
+  min-width: 0 !important;
+  border-left-width: .65cqw !important;
+}
+.platecard .platevisual.realplate .plate-region b { font-size: 12.8cqw !important; }
+.platecard .platevisual.realplate .plate-region em { font-size: 3.8cqw !important; }
+.platecard .platevisual.realplate .flag-ru {
+  width: 8.3cqw !important;
+  height: 2.75cqw !important;
+  min-width: 12px !important;
+  min-height: 4px !important;
+}
+
+/* На большом экране масштабируется только размер: форма остаётся 520:112. */
+.platevisual.realplate.plate-xl {
+  width: min(760px, 92vw) !important;
+  height: auto !important;
+  aspect-ratio: 520 / 112 !important;
+  min-height: 0 !important;
+  margin: 18px auto !important;
+  border-width: 3px !important;
+}
+.platevisual.realplate.plate-xl .plate-main {
+  font-size: 19.2cqw !important;
+  padding: 0 1.5cqw 0 4.1cqw !important;
+  gap: 1.15cqw !important;
+}
+.platevisual.realplate.plate-xl .plate-region {
+  flex-basis: 25.2% !important;
+  width: 25.2% !important;
+  min-width: 0 !important;
+}
+.platevisual.realplate.plate-xl .plate-region b { font-size: 12.8cqw !important; }
+.platevisual.realplate.plate-xl .plate-region em { font-size: 3.8cqw !important; }
+.platevisual.realplate.plate-xl .flag-ru {
+  width: 8.3cqw !important;
+  height: 2.75cqw !important;
+  min-width: 15px !important;
+  min-height: 5px !important;
+}
+@media (max-width: 600px) {
+  .platevisual.realplate.plate-xl {
+    width: 94vw !important;
+    aspect-ratio: 520 / 112 !important;
+  }
+  .platevisual.realplate.plate-xl .plate-main {
+    font-size: 19.2cqw !important;
+    letter-spacing: 0 !important;
+  }
+  .platevisual.realplate.plate-xl .plate-region {
+    flex-basis: 25.2% !important;
+    width: 25.2% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Three-digit region codes fit the same fixed region area. */
+.platevisual.realplate .plate-region--three b { transform: scaleX(.82) !important; transform-origin: center center !important; }
+/* Generator-stage plate stays within the stage column; reveal plates may grow to 760px. */
+.stage-plate .platevisual.realplate.plate-xl { width: 100% !important; }
+.platecard .platevisual.realplate { border-radius: 4px !important; }
+
+/* Финальная корректировка: уменьшаем только основные символы, не всю табличку. */
+.platevisual.realplate .plate-main {
+  font-size: 16.8cqw !important;
+  font-weight: 800 !important;
+  gap: .55cqw !important;
+  padding-left: 4.1cqw !important;
+  padding-right: 1.1cqw !important;
+  letter-spacing: -.025em !important;
+}
+.platevisual.realplate .plate-series-first,
+.platevisual.realplate .plate-series-end,
+.platevisual.realplate .plate-digits,
+.platevisual.realplate .plate-main-text {
+  font-weight: 800 !important;
+  letter-spacing: -.035em !important;
+}
+.platevisual.realplate.plate-xl .plate-main { font-size: 16.8cqw !important; }
+.platecard .platevisual.realplate .plate-main { font-size: 16.8cqw !important; }
+@media (max-width: 600px) {
+  .platevisual.realplate.plate-xl .plate-main { font-size: 16.8cqw !important; }
+}

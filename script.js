@@ -82,6 +82,7 @@ if (Math.abs(CONFIG.rarities.reduce((s, r) => s + r.chance, 0) - 100) > .001) {
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const fmt = n => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(Math.floor(n));
+const escapeHTML = value => String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
 
 const LocalizationManager = {
   dict: {
@@ -102,7 +103,7 @@ const defaultState = () => ({
   upgrades: { collection: 0, vault: 0, luck: 0, income: 0 },
   unlocked: ['russia', 'belarus'],
   selected: { country: 'russia', region: 'Москва (77)', type: 'civil' },
-  level: 1, xp: 0,
+  level: 1, xp: 0, adminFreeAll: false,
   stats: { rolls: 0, spent: 0, earned: 0, sold: 0, rarities: {}, best: 0, unique: [], lastDaily: '', lastTime: Date.now(), firstSeen: [], countriesOpened: 2 },
   quests: { date: '', items: [], claimed: [] },
   achievements: [], events: [], tutorial: false, last: null
@@ -111,6 +112,7 @@ const defaultState = () => ({
 const defaultSettings = () => ({ theme: 'dark', language: 'ru', volume: 60, sound: true, animations: true, reduced: false, confirmRare: true, music: false });
 
 let state; let settings; let busy = false; let revealReady = false; let selected = new Set(); let rarityMotion = 0;
+let adminAuthorized = false, sandboxMode = false, sandboxBackup = null, sandboxChanceBackup = null, pendingRevealedPlate = null, debugOverlayTimer = null;
 
 const StorageManager = {
   key: 'plate_rng_save_v1', settings: 'plate_rng_settings_v1',
@@ -128,6 +130,7 @@ const StorageManager = {
     return defaultState();
   },
   save() {
+    if (sandboxMode) { setDebugOutput('Sandbox Mode активен: сохранение отключено, изменения останутся временными.'); return; }
     try { localStorage.setItem(this.key + '_backup', localStorage.getItem(this.key) || ''); localStorage.setItem(this.key, JSON.stringify(state)); } catch (e) { toast('Не удалось сохранить прогресс'); }
   },
   loadSettings() { try { return Object.assign(defaultSettings(), JSON.parse(localStorage.getItem(this.settings)) || {}); } catch (e) { return defaultSettings(); } },
@@ -267,7 +270,7 @@ function analyzeNumber(number) {
   /* Нормализуем кириллицу → латиница для единообразия */
   const cyr2lat = {
     А:'A', В:'B', Е:'E', К:'K', М:'M', Н:'H',
-    О:'O', Р:'P', С:'C', Т:'T', У:'У', Х:'X'
+    О:'O', Р:'P', С:'C', Т:'T', У:'Y', Х:'X'
   };
   const normCore = core.toUpperCase()
     .replace(/[АВЕКМНОРСТУХ]/g, c => cyr2lat[c] || c);
@@ -559,52 +562,50 @@ const EconomyManager = {
 function cost() { let s = state.selected; let c = CONFIG.countries[s.country]; return Math.round(c.base * c.regions[s.region] * c.types[s.type]); }
 function xpNeed() { return 100 + state.level * 70; }
 function gainXP(n) {
-  state.xp += n;
+  if (!Number.isFinite(n) || n <= 0) return;
+  state.xp += Math.floor(n);
+  let levelsGained = 0;
+  let rewardTotal = 0;
   while (state.xp >= xpNeed()) {
-    state.xp -= xpNeed(); state.level++;
-    let reward = state.level * 6000;
-    EconomyManager.add(reward, `Уровень ${state.level}: +${fmt(reward)} ₽`); toast(`Новый уровень ${state.level}! +${fmt(reward)} ₽`); AudioManager.play('rare');
+    state.xp -= xpNeed();
+    state.level++;
+    levelsGained++;
+    rewardTotal += state.level * 6000;
   }
+  if (levelsGained) {
+    EconomyManager.add(rewardTotal, `Награда за ${levelsGained} уровн. прогресса: +${fmt(rewardTotal)} ₽`);
+    toast(`Новый уровень: ${state.level}! +${fmt(rewardTotal)} ₽`);
+    AudioManager.play('rare');
+  }
+  updateLevelUI();
 }
 
 function makePlate() {
   const s = state.selected;
-
-  // 1. Сначала выбираем базовую редкость по вероятности
-  let baseRarity = RaritySystem.pick();
-
-  // 2. Генерируем номер под эту редкость
+  const baseRarity = RaritySystem.pick();
   const g = NumberGenerator.generate(s.country, s.type, s.region, baseRarity.id);
-
-  // 3. Анализируем реальную красоту сгенерированной комбинации
   const beauty = analyzeNumber(g.combination);
-
-  // 4. Применяем возможный апгрейд редкости на основе beautyScore
   const rarity = RaritySystem.applyBeautyUpgrade(baseRarity, beauty.beautyScore);
-
-  // 5. Считаем цену уже с финальной редкостью
   const val = PriceCalculator.value(rarity, beauty, s.country, s.type, g.combination);
-
-  const comboKey  = `${s.country}|${g.combination}`;
+  const comboKey = `${s.country}|${g.combination}`;
   const duplicate = state.stats.unique.includes(comboKey);
-
-  if (!duplicate) state.stats.unique.push(comboKey);
-
   return {
-    id:      `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: `p_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     country: s.country,
-    region:  s.region,
-    type:    s.type,
-    rarity:  rarity.id,
-    value:   val,
-    date:    new Date().toISOString(),
+    region: s.region,
+    type: s.type,
+    rarity: rarity.id,
+    value: val,
+    date: new Date().toISOString(),
     duplicate,
-    description:        (duplicate ? 'Дубликат. ' : '') + beauty.description,
+    description: (duplicate ? 'Дубликат. ' : '') + beauty.description,
     additionalFeatures: beauty.additionalFeatures,
-    beautyScore:        beauty.beautyScore,
-    wasUpgraded:        rarity.id !== baseRarity.id, // флаг для отладки
+    beautyScore: beauty.beautyScore,
+    wasUpgraded: rarity.id !== baseRarity.id,
+    baseRarityId: baseRarity.id,
+    baseChance: baseRarity.chance,
     ...g,
-    beauty  // сохраняем полный объект анализа
+    beauty
   };
 }
 
@@ -625,6 +626,11 @@ function updateRarityScale(id, animate = false, duration = 120) {
 }
 
 function finishRoll(p) {
+  const comboKey = `${p.country}|${p.combination}`;
+  p.duplicate = state.stats.unique.includes(comboKey);
+  if (!p.duplicate) state.stats.unique.push(comboKey);
+  const baseDescription = p.beauty?.description || p.description || 'Стандартная комбинация';
+  p.description = (p.duplicate ? 'Дубликат. ' : '') + baseDescription.replace(/^Дубликат\.\s*/, '');
   state.collection.push(p); state.last = p;
   state.stats.rolls++; state.stats.rarities[p.rarity] = (state.stats.rarities[p.rarity] || 0) + 1; state.stats.best = Math.max(state.stats.best, p.value);
   if (!state.stats.firstSeen.includes(p.rarity)) state.stats.firstSeen.push(p.rarity);
@@ -640,10 +646,13 @@ function finishRoll(p) {
 function roll() {
   if (busy || $('#rareReveal').classList.contains('show')) return;
   if (state.collection.length >= state.capacity.collection) return toast('В коллекции нет места — продайте номер или улучшите стеллажи.');
-  let c = cost();
-  if (!EconomyManager.spend(c)) return toast('Недостаточно рублей для выбивания.');
+  let c = pendingRevealedPlate?._rollCost ?? cost();
+  if (!state.adminFreeAll && !EconomyManager.spend(c)) return toast('Недостаточно рублей для выбивания.');
+  if (state.adminFreeAll) log('Free All: генерация без списания рублей');
   busy = true; $('#rollBtn').disabled = true;
-  let p = makePlate();
+  let p = pendingRevealedPlate || makePlate();
+  pendingRevealedPlate = null;
+  if (p._rollCost != null) delete p._rollCost;
   let duration = settings.reduced ? 60 : settings.animations ? 120 : 0;
   updateRarityScale(p.rarity, duration > 0, duration);
   finishRoll(p);
@@ -678,7 +687,7 @@ function upgradeCost(id) { let u = CONFIG.upgrades[id]; let l = state.upgrades[i
 function buyUpgrade(id) {
   let u = CONFIG.upgrades[id]; let l = state.upgrades[id]; let price = upgradeCost(id);
   if (l >= u.max) return toast('Максимальный уровень улучшения.');
-  if (!EconomyManager.spend(price)) return toast('Недостаточно рублей.');
+  if (!state.adminFreeAll && !EconomyManager.spend(price)) return toast('Недостаточно рублей.');
   state.upgrades[id]++;
   if (id === 'collection') state.capacity.collection += u.step;
   if (id === 'vault') state.capacity.vault += u.step;
@@ -756,13 +765,13 @@ function saveRender() { StorageManager.save(); render(); }
 
 function plateMarkup(p, large = false) {
   let isRu = p.country === 'russia';
-  let parts = p.combination.trim().split(/\s+/);
-  let body = parts.slice(0, -1).join(' ') || parts[0];
+  let parts = String(p.combination || '').trim().split(/\s+/);
+  let body = parts.slice(0, -1).join(' ') || parts[0] || '';
   let region = parts.length > 1 ? parts.at(-1) : '';
   if (isRu) {
-    return `<div class="platevisual realplate ${large ? 'plate-xl' : ''}"><span class="plate-main">${body}</span><span class="plate-region"><b>${region}</b><em>RUS</em><i class="flag-ru"></i></span></div>`;
+    return `<div class="platevisual realplate ${large ? 'plate-xl' : ''}"><span class="plate-main">${escapeHTML(body)}</span><span class="plate-region"><b>${escapeHTML(region)}</b><em>RUS</em><i class="flag-ru"></i></span></div>`;
   }
-  return `<div class="platevisual ${large ? 'plate-xl' : ''}" style="--platebg:${p.style.bg};--platefg:${p.style.fg}">${p.combination}</div>`;
+  return `<div class="platevisual ${large ? 'plate-xl' : ''}" style="--platebg:${escapeHTML(p.style?.bg || '#f5f5f5')};--platefg:${escapeHTML(p.style?.fg || '#111')}">${escapeHTML(p.combination)}</div>`;
 }
 
 function plateCard(p, place) {
@@ -779,12 +788,17 @@ function render() {
   LocalizationManager.apply();
   $('#rubles').textContent = fmt(state.rubles); $('#dollars').textContent = fmt(state.dollars);
   $('#level').textContent = state.level; $('#xpBar').style.width = `${state.xp / xpNeed() * 100}%`;
+  updateLevelUI();
   $('#capacity').textContent = `${state.collection.length} / ${state.capacity.collection}`;
   renderSelectors();
   $('#rollCost').textContent = `${fmt(cost())} ₽`; $('#rollBtn').disabled = busy;
   let country = CONFIG.countries[state.selected.country];
   let region = (state.selected.region.match(/\(([^)]+)\)/) || [])[1] || '';
   $('#stageCountry').textContent = `${country.flag} ${country.name} · ${region}`;
+  const isUltraLast = state.last?.rarity === 'ultra';
+  $('#rollStage').classList.toggle('is-ultra', isUltraLast);
+  $('#stageRarity').classList.toggle('ultra-rainbow-text', isUltraLast);
+  $('#stageValue').classList.toggle('ultra-rainbow-text', isUltraLast);
   if (state.last) {
     let r = RaritySystem.get(state.last.rarity);
     $('#stagePlate').innerHTML = plateMarkup(state.last, true); $('#stageRarity').textContent = r.name.toUpperCase(); $('#stageRarity').style.color = r.color; $('#stageValue').textContent = `${fmt(state.last.value)} ₽`; $('#stageValue').style.color = r.color; $('#stageDescription').textContent = state.last.description; $('#rollStage').style.setProperty('--glow', r.color);
@@ -848,7 +862,7 @@ function unlock(id) {
   let c = CONFIG.countries[id];
   if (state.unlocked.includes(id)) return;
   if (state.level < 2) return toast('Для открытия новых стран нужен 2 уровень.');
-  if (!EconomyManager.spend(c.unlock)) return toast('Недостаточно рублей.');
+  if (!state.adminFreeAll && !EconomyManager.spend(c.unlock)) return toast('Недостаточно рублей.');
   state.unlocked.push(id); state.stats.countriesOpened = state.unlocked.length;
   gainXP(100); log(`Открыта страна: ${c.name}`); checkAchievements(); saveRender(); toast(`${c.flag} ${c.name} открыта!`);
 }
@@ -857,8 +871,8 @@ let revealRun = 0;
 function reveal(p) {
   let run = ++revealRun; let r = RaritySystem.get(p.rarity);
   let overlay = $('#rareReveal'); let content = $('#revealContent');
-  revealReady = false; overlay.className = 'rareReveal'; overlay.removeAttribute('style'); content.replaceChildren(); content.className = ''; content.removeAttribute('style');
-  content.innerHTML = `<section class="reveal calculating" style="--rarity:${r.color}"><p class="reveal-kicker">РЕДКОСТЬ ОПРЕДЕЛЕНА</p><p class="rarename">${r.name}</p>${plateMarkup(p,true)}<div class="reveal-status">Номер выпал</div><div class="value hidden" id="revealPrice">${fmt(0)} ₽</div><p class="desc hidden">${p.description}</p>${p.additionalFeatures?.length?`<ul class="reveal-features hidden">${p.additionalFeatures.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}<small class="skip hidden">Нажмите в любом месте, чтобы продолжить</small></section>`;
+  revealReady = false; overlay.className = p.rarity === 'ultra' ? 'rareReveal ultra-reveal' : 'rareReveal'; overlay.removeAttribute('style'); content.replaceChildren(); content.className = ''; content.removeAttribute('style');
+  content.innerHTML = `<section class="reveal calculating ${p.rarity === 'ultra' ? 'is-ultra' : ''}" style="--rarity:${r.color}"><p class="reveal-kicker">РЕДКОСТЬ ОПРЕДЕЛЕНА</p><p class="rarename">${r.name}</p>${plateMarkup(p,true)}<div class="reveal-status">Номер выпал</div><div class="value hidden" id="revealPrice">${fmt(0)} ₽</div><p class="desc hidden">${p.description}</p>${p.additionalFeatures?.length?`<ul class="reveal-features hidden">${p.additionalFeatures.map(x=>`<li>${x}</li>`).join('')}</ul>`:''}<small class="skip hidden">Нажмите в любом месте, чтобы продолжить</small></section>`;
   overlay.classList.add('show','revealing'); document.body.classList.add('rare-reveal-open');
   let price = $('#revealPrice'); let duration = settings.reduced ? 700 : 1200;
   function count(now, start) {
@@ -888,6 +902,7 @@ function migratePriceModel() {
 }
 
 function init() {
+  loadAdminConfiguration();
   state = StorageManager.load(); settings = StorageManager.loadSettings(); quests(); render();
   if (!state.tutorial) { $('#tutorial').classList.add('show'); }
   $$('[data-nav]').forEach(b => { b.onclick = () => navigate(b.dataset.nav); });
@@ -925,4 +940,580 @@ document.addEventListener('DOMContentLoaded', () => {
   let overlay=$('#rareReveal');
   overlay.onclick=()=>{if(!revealReady)return;overlay.classList.remove('show','revealing');document.body.classList.remove('rare-reveal-open');revealReady=false;};
   document.addEventListener('keydown',e=>{if(!overlay.classList.contains('show'))return;if(overlay.classList.contains('revealing')){e.preventDefault();e.stopImmediatePropagation();return;}if(e.key==='Enter'||e.code==='Space'){e.preventDefault();e.stopImmediatePropagation();overlay.classList.remove('show');document.body.classList.remove('rare-reveal-open');revealReady=false;}},true);
+});
+
+/* ========================================================================
+   ADMIN PANEL + DEBUG LAB + LEVEL UI
+   Client-only developer tools. The password is a convenience gate, not
+   secure authentication: anyone with DevTools can inspect local JS/storage.
+   ======================================================================== */
+const ADMIN_SETTINGS_KEY = 'plate_rng_admin_settings_v1';
+
+function loadAdminConfiguration() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(ADMIN_SETTINGS_KEY) || '{}');
+    if (Array.isArray(saved.chances) && saved.chances.length === CONFIG.rarities.length) {
+      const vals = saved.chances.map(Number);
+      const sum = vals.reduce((a, b) => a + b, 0);
+      if (vals.every(v => Number.isFinite(v) && v >= 0 && v <= 100) && Math.abs(sum - 100) < 0.011) {
+        CONFIG.rarities.forEach((r, i) => { r.chance = vals[i]; });
+      }
+    }
+  } catch (e) {
+    console.warn('Не удалось загрузить admin-настройки:', e);
+  }
+}
+
+function saveAdminConfiguration() {
+  const payload = { chances: CONFIG.rarities.map(r => r.chance) };
+  if (!sandboxMode) {
+    try { localStorage.setItem(ADMIN_SETTINGS_KEY, JSON.stringify(payload)); }
+    catch (e) { toast('Не удалось сохранить шансы.'); }
+  }
+}
+
+function setDebugOutput(message, append = false) {
+  const out = $('#debugOutput');
+  if (!out) return;
+  const text = typeof message === 'string' ? message : JSON.stringify(message, null, 2);
+  out.textContent = append && out.textContent ? `${out.textContent}\n${text}` : text;
+}
+
+function getPlateStyle(country) {
+  const styles = {
+    russia: { bg: '#f7f7f5', fg: '#111111' },
+    belarus: { bg: '#ffffff', fg: '#111111' },
+    kazakhstan: { bg: '#f5fbfa', fg: '#154943' },
+    usa: { bg: '#e8f1fb', fg: '#153d78' },
+    germany: { bg: '#f4f4f4', fg: '#111111' },
+    uk: { bg: '#ffe736', fg: '#111111' },
+    japan: { bg: '#fafafa', fg: '#18202c' }
+  };
+  return styles[country] || { bg: '#f5f5f5', fg: '#141414' };
+}
+
+function updateLevelUI() {
+  const currentLevel = $('#level');
+  const bar = $('#xpBar');
+  const need = xpNeed();
+  if (currentLevel) currentLevel.textContent = state?.level ?? 1;
+  if (bar && state) {
+    bar.style.width = `${Math.max(0, Math.min(100, state.xp / need * 100))}%`;
+    bar.title = `${fmt(state.xp)} / ${fmt(need)} XP`;
+  }
+  const label = $('#levelDetailText');
+  if (label && state) label.textContent = `Уровень ${state.level} · ${fmt(state.xp)} / ${fmt(need)} XP`;
+  const detailBar = $('#levelDetailBar');
+  if (detailBar && state) detailBar.style.width = `${Math.max(0, Math.min(100, state.xp / need * 100))}%`;
+  const badge = $('#adminLevelCurrent');
+  if (badge && state) badge.textContent = `Уровень ${state.level} · ${fmt(state.xp)} / ${fmt(need)} XP`;
+}
+
+function injectLevelWidget() {
+  const stage = $('.stage-bottom') || $('.roll-stage');
+  if (!stage || $('#levelDetail')) return;
+  const card = document.createElement('div');
+  card.id = 'levelDetail';
+  card.className = 'level-detail';
+  card.innerHTML = `
+    <div class="level-detail__top"><strong id="levelDetailText">Уровень 1</strong><span>XP</span></div>
+    <div class="level-detail__track"><i id="levelDetailBar"></i></div>
+  `;
+  stage.appendChild(card);
+}
+
+function injectAdminDebugPages() {
+  if ($('#adminPage') || !$('main')) return;
+  const main = $('main');
+  const admin = document.createElement('section');
+  admin.id = 'adminPage';
+  admin.className = 'page admin-page';
+  admin.innerHTML = `
+    <div class="pagehead"><div><p class="eyebrow">DEVELOPER ACCESS</p><h2>Admin Panel <span>локальные инструменты</span></h2></div><button id="adminBack" class="small">← Настройки</button></div>
+    <div class="admin-warning">Локальная панель разработчика. Пароль находится в клиентском коде и не защищает игру от изменения через DevTools.</div>
+    <section class="admin-grid">
+      <article class="admin-card"><p class="eyebrow">ECONOMY</p><h3>Валюты</h3>
+        <label>Сумма рублей<input id="adminRublesAmount" type="number" min="0" step="1000" value="100000"></label>
+        <div class="admin-actions"><button id="adminAddRubles">+ ₽</button><button id="adminSetRubles">Установить ₽</button></div>
+        <label>Сумма долларов<input id="adminDollarsAmount" type="number" min="0" step="10" value="100"></label>
+        <div class="admin-actions"><button id="adminAddDollars">+ $</button><button id="adminSetDollars">Установить $</button></div>
+        <small id="adminMoneyStatus" class="admin-muted"></small>
+      </article>
+      <article class="admin-card"><p class="eyebrow">PROGRESSION</p><h3>Уровень и опыт</h3>
+        <div id="adminLevelCurrent" class="admin-level-current"></div>
+        <label>Количество XP<input id="adminXpAmount" type="number" min="0" step="100" value="1000"></label>
+        <div class="admin-actions"><button id="adminAddXp" class="primary">Добавить XP</button><button id="adminSetXp">Установить XP</button></div>
+        <label>Установить уровень<input id="adminLevelAmount" type="number" min="1" max="1000000" step="1" value="10"></label>
+        <button id="adminSetLevel">Установить уровень</button>
+      </article>
+      <article class="admin-card admin-card--wide"><p class="eyebrow">CUSTOM ITEM</p><h3>Создать любой номер</h3>
+        <div class="admin-form-grid">
+          <label>Комбинация<input id="adminPlateText" type="text" maxlength="40" value="А000АА 77" placeholder="А000АА 77"></label>
+          <label>Страна<select id="adminPlateCountry">${Object.entries(CONFIG.countries).map(([id,c])=>`<option value="${id}">${c.flag} ${c.name}</option>`).join('')}</select></label>
+          <label>Регион<select id="adminPlateRegion"></select></label>
+          <label>Тип<select id="adminPlateType"></select></label>
+          <label>Редкость<select id="adminPlateRarity">${CONFIG.rarities.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')}</select></label>
+          <label>Цена (пусто = рассчитать)<input id="adminPlatePrice" type="number" min="0" step="1" placeholder="Автоматически"></label>
+          <label>Добавить в<select id="adminPlateDestination"><option value="collection">Коллекцию</option><option value="vault">Сейф</option></select></label>
+        </div>
+        <button id="adminCreatePlate" class="primary">Создать номер</button><small id="adminCreateStatus" class="admin-muted"></small>
+      </article>
+      <article class="admin-card admin-card--wide"><p class="eyebrow">RNG CONFIG</p><h3>Шансы выпадения</h3>
+        <p class="admin-muted">Это базовые шансы перед возможным повышением редкости за красоту. Сумма обязана быть равна 100%.</p>
+        <div id="adminChanceFields" class="admin-chance-grid"></div>
+        <div class="admin-chance-footer"><strong id="adminChanceSum">Сумма: 100%</strong><button id="adminSaveChances" class="primary">Сохранить шансы</button><button id="adminResetChances">Сбросить</button></div>
+        <div id="adminChanceStatus" class="admin-muted"></div>
+      </article>
+      <article class="admin-card"><p class="eyebrow">UNLOCKS</p><h3>Free All</h3>
+        <p class="admin-muted">Открывает все страны, максимальные уровни улучшений, выдаёт большой запас валюты и отключает оплату генераций/улучшений.</p>
+        <button id="adminFreeAll" class="primary">Активировать Free All</button><small id="adminFreeStatus" class="admin-muted"></small>
+      </article>
+      <article class="admin-card"><p class="eyebrow">RNG INSPECTOR</p><h3>Reveal RNG</h3>
+        <p class="admin-muted">Показывает предварительно сгенерированный следующий номер, редкость, базовый шанс и оценку. Нажатие «Выбить номер» использует именно этот результат.</p>
+        <button id="adminRevealRng">Reveal RNG — показать следующий результат</button>
+        <div id="adminRevealResult" class="admin-reveal-result">Предпросмотр ещё не создан.</div>
+        <button id="adminGoDebug">Debug →</button>
+      </article>
+    </section>
+  `;
+
+  const debug = document.createElement('section');
+  debug.id = 'debugPage';
+  debug.className = 'page admin-page';
+  debug.innerHTML = `
+    <div class="pagehead"><div><p class="eyebrow">DIAGNOSTICS</p><h2>Debug Lab <span>инструменты проверки</span></h2></div><button id="debugBack" class="small">← Admin Panel</button></div>
+    <section class="admin-grid">
+      <article class="admin-card"><h3>Notifications test</h3><p class="admin-muted">Проверяет уведомления разных типов.</p><button id="debugNotifications">Запустить тест уведомлений</button></article>
+      <article class="admin-card"><h3>Sound test</h3><p class="admin-muted">Тестирует звук интерфейса и редкого выпадения.</p><button id="debugSound">Проиграть звуки</button></article>
+      <article class="admin-card"><h3>Sandbox mode</h3><p class="admin-muted">Временные изменения игровой сессии не будут записываться в сохранение.</p><button id="debugSandbox">Включить Sandbox</button><small id="debugSandboxStatus" class="admin-muted"></small></article>
+      <article class="admin-card"><h3>DEBUG OVERLAY</h3><p class="admin-muted">Показывает runtime-статус поверх игры.</p><button id="debugOverlayToggle">Включить Debug Overlay</button></article>
+      <article class="admin-card"><h3>Stress Test</h3><p class="admin-muted">Проверяет выбор редкостей на 100 000 итерациях без изменения прогресса.</p><button id="debugStress">Запустить Stress Test</button></article>
+      <article class="admin-card"><h3>Error overlay</h3><p class="admin-muted">Показывает тестовый экран ошибки, не ломая игру.</p><button id="debugErrorOverlay">Показать Error Overlay</button></article>
+      <article class="admin-card"><h3>Analyzer tests</h3><p class="admin-muted">Запускает встроенные проверки комбинаций номерных знаков.</p><button id="debugAnalyzer">Запустить тесты анализа</button></article>
+      <article class="admin-card"><h3>Reveal animation test</h3><p class="admin-muted">Проверяет анимацию эпического выпадения без добавления номера в коллекцию.</p><button id="debugRevealTest">Тестировать редкое выпадение</button></article>
+      <article class="admin-card"><h3>Storage diagnostics</h3><p class="admin-muted">Показывает объём сохранений и наличие резервной копии.</p><button id="debugStorage">Проверить сохранения</button></article>
+      <article class="admin-card"><h3>State audit</h3><p class="admin-muted">Проверяет валюту, ёмкости, дубликаты ID и суммы шансов.</p><button id="debugStateAudit">Проверить состояние игры</button></article>
+      <article class="admin-card admin-card--wide"><h3>Console output</h3><pre id="debugOutput" class="debug-output">Готово. Выбери диагностическую функцию.</pre><div class="admin-actions"><button id="debugClearOutput">Очистить вывод</button><button id="debugBackAdmin">Вернуться в Admin Panel</button></div></article>
+    </section>
+  `;
+
+  main.append(admin, debug);
+
+  // Add the password-gated rng button at the bottom of Settings.
+  const settingsPage = $('#settings');
+  if (settingsPage && !$('#rngAdminAccess')) {
+    const settingsContainer = settingsPage.querySelector('.settings') || settingsPage.querySelector('.card') || settingsPage;
+    const access = document.createElement('section');
+    access.className = 'card admin-access-card';
+    access.innerHTML = `<p class="eyebrow">ADVANCED</p><h3>Расширенные инструменты</h3><p class="admin-muted">Скрытая панель разработчика.</p><button id="rngAdminAccess" class="rng-access-button">rng</button>`;
+    settingsContainer.appendChild(access);
+  }
+
+  // A level/XP widget in the main screen.
+  injectLevelWidget();
+  renderAdminChanceFields();
+  bindAdminDebugEvents();
+  updateLevelUI();
+  updateAdminStatus();
+}
+
+function renderAdminChanceFields() {
+  const box = $('#adminChanceFields');
+  if (!box) return;
+  box.innerHTML = CONFIG.rarities.map(r => `
+    <label class="admin-chance-row"><span style="color:${r.color}">${r.name}</span><input type="number" min="0" max="100" step="0.01" data-admin-chance="${r.id}" value="${r.chance}"><em>%</em></label>
+  `).join('');
+  $$('[data-admin-chance]').forEach(input => input.addEventListener('input', updateAdminChanceSum));
+  updateAdminChanceSum();
+}
+
+function updateAdminChanceSum() {
+  const sum = $$('[data-admin-chance]').reduce((total, input) => total + (Number(input.value) || 0), 0);
+  const target = $('#adminChanceSum');
+  if (target) {
+    target.textContent = `Сумма: ${sum.toFixed(2)}%`;
+    target.classList.toggle('is-invalid', Math.abs(sum - 100) > 0.001);
+  }
+}
+
+function updateAdminStatus() {
+  const m = $('#adminMoneyStatus');
+  if (m && state) m.textContent = `Текущий баланс: ${fmt(state.rubles)} ₽ · $${fmt(state.dollars)}`;
+  const f = $('#adminFreeStatus');
+  if (f && state) {
+    f.textContent = state.adminFreeAll ? 'Free All включён: покупки и броски бесплатны.' : 'Free All выключен.';
+    const btn = $('#adminFreeAll');
+    if (btn) btn.textContent = state.adminFreeAll ? 'Выключить бесплатный режим' : 'Активировать Free All';
+  }
+  const sandbox = $('#debugSandboxStatus');
+  if (sandbox) sandbox.textContent = sandboxMode ? 'Sandbox активен — прогресс не сохраняется.' : 'Sandbox выключен.';
+  const sandboxBtn = $('#debugSandbox');
+  if (sandboxBtn) sandboxBtn.textContent = sandboxMode ? 'Завершить Sandbox и откатить' : 'Включить Sandbox';
+}
+
+function refreshAdminSelects() {
+  const countrySelect = $('#adminPlateCountry');
+  const regionSelect = $('#adminPlateRegion');
+  const typeSelect = $('#adminPlateType');
+  if (!countrySelect || !regionSelect || !typeSelect) return;
+  const country = CONFIG.countries[countrySelect.value] || CONFIG.countries.russia;
+  regionSelect.innerHTML = Object.keys(country.regions).map(r => `<option value="${r}">${r}</option>`).join('');
+  typeSelect.innerHTML = Object.keys(country.types).map(t => `<option value="${t}">${CONFIG.types[t] || t}</option>`).join('');
+}
+
+function adminCreatePlate() {
+  const combination = ($('#adminPlateText')?.value || '').trim();
+  const countryId = $('#adminPlateCountry').value;
+  const country = CONFIG.countries[countryId];
+  const region = $('#adminPlateRegion').value;
+  const type = $('#adminPlateType').value;
+  const rarity = RaritySystem.get($('#adminPlateRarity').value);
+  const destination = $('#adminPlateDestination').value;
+  const target = destination === 'vault' ? state.vault : state.collection;
+  const cap = destination === 'vault' ? state.capacity.vault : state.capacity.collection;
+  if (!combination) return toast('Введи комбинацию номера.');
+  if (target.length >= cap) return toast(destination === 'vault' ? 'Сейф заполнен.' : 'Коллекция заполнена.');
+  const beauty = analyzeNumber(combination);
+  const rawPrice = $('#adminPlatePrice').value.trim();
+  let value = rawPrice === ''
+    ? PriceCalculator.value(rarity, beauty, countryId, type, combination)
+    : Number(rawPrice);
+  if (!Number.isFinite(value) || value < 0) return toast('Некорректная цена.');
+  value = Math.floor(Math.max(rarity.min, Math.min(rarity.max, value)));
+  const key = `${countryId}|${combination}`;
+  const duplicate = state.stats.unique.includes(key);
+  const plate = {
+    id: `admin_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+    country: countryId, region, type, rarity: rarity.id, value,
+    date: new Date().toISOString(), duplicate,
+    combination,
+    style: getPlateStyle(countryId),
+    description: `${duplicate ? 'Дубликат. ' : ''}${beauty.description || beauty.primaryDescription}`,
+    additionalFeatures: beauty.additionalFeatures || [],
+    beautyScore: beauty.beautyScore || 0,
+    beauty,
+    adminCreated: true
+  };
+  target.push(plate);
+  if (!duplicate) state.stats.unique.push(key);
+  state.stats.rarities[rarity.id] = (state.stats.rarities[rarity.id] || 0) + 1;
+  log(`Admin Panel: создан номер ${combination} (${rarity.name})`);
+  $('#adminCreateStatus').textContent = `Создано: ${combination} · ${fmt(value)} ₽ · ${rarity.name}`;
+  StorageManager.save();
+  render();
+  updateAdminStatus();
+  toast('Номер создан.');
+}
+
+function applyAdminChances() {
+  const inputs = $$('[data-admin-chance]');
+  const values = inputs.map(input => Number(input.value));
+  if (values.length !== CONFIG.rarities.length || values.some(v => !Number.isFinite(v) || v < 0 || v > 100)) {
+    $('#adminChanceStatus').textContent = 'Ошибка: каждый шанс должен быть в диапазоне 0–100.';
+    return;
+  }
+  const sum = values.reduce((a, b) => a + b, 0);
+  if (Math.abs(sum - 100) > 0.001) {
+    $('#adminChanceStatus').textContent = `Сумма равна ${sum.toFixed(2)}%, требуется ровно 100%.`;
+    return;
+  }
+  CONFIG.rarities.forEach((r, i) => { r.chance = values[i]; });
+  saveAdminConfiguration();
+  $('#adminChanceStatus').textContent = 'Шансы сохранены. Изменения применяются к следующим броскам.';
+  updateAdminChanceSum();
+  render();
+  toast('Шансы выпадения обновлены.');
+}
+
+function resetAdminChances() {
+  const defaults = [65, 22, 9, 3, .8, .18, .02];
+  CONFIG.rarities.forEach((r, i) => { r.chance = defaults[i]; });
+  saveAdminConfiguration();
+  renderAdminChanceFields();
+  render();
+  const status = $('#adminChanceStatus');
+  if (status) status.textContent = 'Шансы восстановлены к значениям по умолчанию.';
+}
+
+function activateFreeAll() {
+  if (!state.adminFreeAll) {
+    state.adminFreeAll = true;
+    state.unlocked = Object.keys(CONFIG.countries);
+    state.stats.countriesOpened = state.unlocked.length;
+    state.upgrades.collection = CONFIG.upgrades.collection.max;
+    state.upgrades.vault = CONFIG.upgrades.vault.max;
+    state.upgrades.luck = CONFIG.upgrades.luck.max;
+    state.upgrades.income = CONFIG.upgrades.income.max;
+    state.capacity.collection = CONFIG.start.collection + CONFIG.upgrades.collection.step * state.upgrades.collection;
+    state.capacity.vault = CONFIG.start.vault + CONFIG.upgrades.vault.step * state.upgrades.vault;
+    state.rubles = Math.max(state.rubles, 1_000_000_000_000);
+    state.dollars = Math.max(state.dollars, 1_000_000_000);
+    log('Admin Panel: активирован Free All');
+    toast('Free All активирован: всё открыто и покупки бесплатны.');
+  } else {
+    state.adminFreeAll = false;
+    log('Admin Panel: Free All выключен');
+    toast('Бесплатный режим выключен. Уже открытые возможности сохранены.');
+  }
+  checkAchievements();
+  StorageManager.save();
+  render();
+  updateAdminStatus();
+}
+
+function previewRNG() {
+  if (pendingRevealedPlate) {
+    $('#adminRevealResult').textContent = 'Уже есть зарезервированный результат. Нажми «Выбить номер», чтобы использовать его, или обнови предпросмотр.';
+    return;
+  }
+  const uniqueBefore = state.stats.unique.slice();
+  const p = makePlate();
+  state.stats.unique = uniqueBefore; // предпросмотр не меняет коллекционные данные
+  p._rollCost = cost();
+  p.baseChance = Number(p.baseChance ?? RaritySystem.get(p.baseRarityId || p.rarity).chance);
+  pendingRevealedPlate = p;
+  const finalRarity = RaritySystem.get(p.rarity);
+  const baseRarity = RaritySystem.get(p.baseRarityId || p.rarity);
+  const upgradesNote = p.wasUpgraded
+    ? `<p class="admin-muted">Красота подняла редкость: ${baseRarity.name} → ${finalRarity.name}.</p>`
+    : '';
+  $('#adminRevealResult').innerHTML = `
+    <div class="admin-preview-rarity" style="color:${finalRarity.color}">${finalRarity.name}</div>
+    ${plateMarkup(p, true)}
+    <strong>${fmt(p.value)} ₽</strong>
+    <p>${p.description}</p>
+    <p class="admin-muted">Базовый шанс ${baseRarity.name}: ${baseRarity.chance}% · стоимость следующего броска: ${fmt(p._rollCost)} ₽</p>
+    ${upgradesNote}
+    <p class="admin-success">Результат зарезервирован. Следующее нажатие «Выбить номер» использует именно его.</p>
+    <button id="adminCancelReveal">Отменить предпросмотр</button>
+  `;
+  $('#adminCancelReveal').onclick = () => {
+    pendingRevealedPlate = null;
+    $('#adminRevealResult').textContent = 'Предпросмотр отменён.';
+  };
+}
+
+function runStressTest() {
+  const count = 100000;
+  const start = performance.now();
+  const results = Object.fromEntries(CONFIG.rarities.map(r => [r.id, 0]));
+  for (let i = 0; i < count; i++) results[RaritySystem.pick().id]++;
+  const elapsed = (performance.now() - start).toFixed(1);
+  const rows = CONFIG.rarities.map(r => ({
+    rarity: r.name,
+    expected: `${r.chance}%`,
+    actual: `${(results[r.id] / count * 100).toFixed(3)}%`,
+    samples: results[r.id]
+  }));
+  console.table(rows);
+  setDebugOutput(`Stress Test завершён: ${count.toLocaleString('ru-RU')} бросков за ${elapsed} мс.\n` + JSON.stringify(rows, null, 2));
+}
+
+function runStateAudit() {
+  const all = [...state.collection, ...state.vault];
+  const ids = all.map(p => p.id);
+  const sumChances = CONFIG.rarities.reduce((sum, r) => sum + r.chance, 0);
+  const issues = [];
+  if (!Number.isFinite(state.rubles) || state.rubles < 0) issues.push('Некорректный баланс рублей');
+  if (!Number.isFinite(state.dollars) || state.dollars < 0) issues.push('Некорректный баланс долларов');
+  if (state.collection.length > state.capacity.collection) issues.push('Коллекция превышает вместимость');
+  if (state.vault.length > state.capacity.vault) issues.push('Сейф превышает вместимость');
+  if (new Set(ids).size !== ids.length) issues.push('Обнаружены повторяющиеся ID предметов');
+  if (Math.abs(sumChances - 100) > .001) issues.push(`Сумма шансов ${sumChances}, а должна быть 100`);
+  all.forEach(p => {
+    const r = RaritySystem.get(p.rarity);
+    if (!r) issues.push(`Неизвестная редкость у ${p.combination}`);
+    else if (!Number.isFinite(p.value) || p.value < r.min || p.value > r.max) issues.push(`Цена вне диапазона у ${p.combination}`);
+  });
+  setDebugOutput({ result: issues.length ? 'ISSUES FOUND' : 'OK', issues, collection: state.collection.length, vault: state.vault.length, level: state.level, xp: state.xp, chanceSum: sumChances });
+}
+
+function toggleSandbox() {
+  if (!sandboxMode) {
+    sandboxBackup = JSON.parse(JSON.stringify(state));
+    sandboxChanceBackup = CONFIG.rarities.map(r => r.chance);
+    state = JSON.parse(JSON.stringify(state));
+    sandboxMode = true;
+    log('Debug: Sandbox Mode запущен');
+    toast('Sandbox включён: изменения не будут сохранены.');
+  } else {
+    state = sandboxBackup || state;
+    sandboxBackup = null;
+    if (sandboxChanceBackup) CONFIG.rarities.forEach((r, i) => { r.chance = sandboxChanceBackup[i]; });
+    sandboxChanceBackup = null;
+    sandboxMode = false;
+    toast('Sandbox завершён. Исходный прогресс восстановлен.');
+  }
+  render();
+  updateAdminStatus();
+  setDebugOutput(sandboxMode
+    ? 'Sandbox активен. Игровые изменения происходят во временной копии состояния.'
+    : 'Sandbox завершён. Восстановлен сохранённый до теста игровой прогресс.');
+}
+
+function toggleDebugOverlay() {
+  let old = $('#debugOverlay');
+  if (old) {
+    old.remove();
+    clearInterval(debugOverlayTimer);
+    debugOverlayTimer = null;
+    $('#debugOverlayToggle').textContent = 'Включить Debug Overlay';
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'debugOverlay';
+  overlay.innerHTML = `<div class="debug-overlay-head"><b>DEBUG OVERLAY</b><button id="debugOverlayClose">×</button></div><pre id="debugOverlayData"></pre>`;
+  document.body.appendChild(overlay);
+  $('#debugOverlayToggle').textContent = 'Выключить Debug Overlay';
+  const update = () => {
+    const data = {
+      page: $('.page.active')?.id || 'unknown',
+      level: state.level,
+      xp: `${state.xp}/${xpNeed()}`,
+      rubles: state.rubles,
+      dollars: state.dollars,
+      collection: `${state.collection.length}/${state.capacity.collection}`,
+      vault: `${state.vault.length}/${state.capacity.vault}`,
+      rolls: state.stats.rolls,
+      freeAll: !!state.adminFreeAll,
+      sandbox: sandboxMode,
+      heapHint: `${Math.round(JSON.stringify(state).length / 1024)} KB save-state`
+    };
+    const target = $('#debugOverlayData');
+    if (target) target.textContent = JSON.stringify(data, null, 2);
+  };
+  update();
+  debugOverlayTimer = setInterval(update, 700);
+  $('#debugOverlayClose').onclick = toggleDebugOverlay;
+}
+
+function showErrorOverlay() {
+  let overlay = $('#debugErrorOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'debugErrorOverlay';
+    overlay.className = 'debug-error-overlay';
+    overlay.innerHTML = `<section><div class="debug-error-icon">!</div><p class="eyebrow">DEBUG SIMULATION</p><h2>Test error overlay</h2><p>Это демонстрационная ошибка интерфейса. Реальная игра не сломана.</p><pre>DEBUG_TEST_ERROR\nSource: Debug Lab\nState: simulated\nAction: close overlay to continue</pre><button id="debugErrorClose" class="primary">Понятно, закрыть</button></section>`;
+    document.body.appendChild(overlay);
+    $('#debugErrorClose').onclick = () => overlay.remove();
+  }
+}
+
+function debugStorageDiagnostics() {
+  const keys = [];
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key) continue;
+    const value = localStorage.getItem(key) || '';
+    total += key.length + value.length;
+    if (/plate_rng/i.test(key)) keys.push({ key, chars: value.length });
+  }
+  setDebugOutput({ totalApproxKB: Math.round(total / 1024 * 100) / 100, gameKeys: keys, sandboxMode, note: 'Размер приблизительный: строковые символы, а не точный объём хранения браузера.' });
+}
+
+function bindAdminDebugEvents() {
+  // Select values follow the selected country in the admin item generator.
+  refreshAdminSelects();
+  $('#adminPlateCountry').addEventListener('change', refreshAdminSelects);
+
+  $('#rngAdminAccess')?.addEventListener('click', () => {
+    const password = prompt('Введите пароль для RNG Admin Panel:');
+    if (password !== 'rng-6xDa') return toast('Неверный пароль.');
+    adminAuthorized = true;
+    navigate('adminPage');
+    renderAdminChanceFields();
+    updateAdminStatus();
+  });
+
+  $('#adminBack').onclick = () => navigate('settings');
+  $('#adminGoDebug').onclick = () => { navigate('debugPage'); updateAdminStatus(); };
+  $('#debugBack').onclick = () => navigate('adminPage');
+  $('#debugBackAdmin').onclick = () => navigate('adminPage');
+
+  $('#adminAddRubles').onclick = () => {
+    const amount = Number($('#adminRublesAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное число.');
+    EconomyManager.add(Math.min(Math.floor(amount), Number.MAX_SAFE_INTEGER), 'Admin Panel: добавлены рубли');
+    StorageManager.save(); render(); updateAdminStatus();
+  };
+  $('#adminSetRubles').onclick = () => {
+    const amount = Number($('#adminRublesAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное число.');
+    state.rubles = Math.min(Math.floor(amount), Number.MAX_SAFE_INTEGER);
+    log('Admin Panel: баланс рублей установлен вручную');
+    StorageManager.save(); render(); updateAdminStatus();
+  };
+  $('#adminAddDollars').onclick = () => {
+    const amount = Number($('#adminDollarsAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное число.');
+    state.dollars = Math.min(Number.MAX_SAFE_INTEGER, state.dollars + Math.floor(amount));
+    log('Admin Panel: добавлены доллары'); StorageManager.save(); render(); updateAdminStatus();
+  };
+  $('#adminSetDollars').onclick = () => {
+    const amount = Number($('#adminDollarsAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное число.');
+    state.dollars = Math.min(Math.floor(amount), Number.MAX_SAFE_INTEGER);
+    log('Admin Panel: баланс долларов установлен вручную'); StorageManager.save(); render(); updateAdminStatus();
+  };
+
+  $('#adminAddXp').onclick = () => {
+    const amount = Number($('#adminXpAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное количество XP.');
+    gainXP(Math.min(Math.floor(amount), 1_000_000_000));
+    log(`Admin Panel: добавлено ${fmt(amount)} XP`); StorageManager.save(); render(); updateAdminStatus();
+  };
+  $('#adminSetXp').onclick = () => {
+    const amount = Number($('#adminXpAmount').value);
+    if (!Number.isFinite(amount) || amount < 0) return toast('Введи корректное количество XP.');
+    state.xp = Math.min(Math.floor(amount), xpNeed() - 1);
+    log(`Admin Panel: XP установлен: ${fmt(state.xp)}`); StorageManager.save(); render(); updateAdminStatus();
+  };
+  $('#adminSetLevel').onclick = () => {
+    const level = Number($('#adminLevelAmount').value);
+    if (!Number.isInteger(level) || level < 1 || level > 1_000_000) return toast('Уровень должен быть целым числом от 1 до 1 000 000.');
+    state.level = level;
+    state.xp = Math.min(state.xp, xpNeed() - 1);
+    log(`Admin Panel: уровень установлен на ${level}`); StorageManager.save(); render(); updateAdminStatus();
+  };
+
+  $('#adminCreatePlate').onclick = adminCreatePlate;
+  $('#adminSaveChances').onclick = applyAdminChances;
+  $('#adminResetChances').onclick = resetAdminChances;
+  $('#adminFreeAll').onclick = activateFreeAll;
+  $('#adminRevealRng').onclick = previewRNG;
+
+  $('#debugNotifications').onclick = () => {
+    toast('DEBUG: обычное уведомление');
+    setDebugOutput('Отправлены notifications test. Следующие уведомления заменяют предыдущее в стандартном toast-контейнере.');
+    setTimeout(() => toast('DEBUG: тест предупреждения пройден'), 450);
+  };
+  $('#debugSound').onclick = () => {
+    AudioManager.play('click');
+    setTimeout(() => AudioManager.play('rare'), 220);
+    setTimeout(() => AudioManager.play('sell'), 480);
+    setDebugOutput('Sound test отправил три сигнала: click, rare, sell. Убедись, что звук включён и браузер разрешил AudioContext.');
+  };
+  $('#debugSandbox').onclick = toggleSandbox;
+  $('#debugOverlayToggle').onclick = toggleDebugOverlay;
+  $('#debugStress').onclick = runStressTest;
+  $('#debugErrorOverlay').onclick = showErrorOverlay;
+  $('#debugAnalyzer').onclick = () => {
+    const result = runNumberAnalysisTests();
+    setDebugOutput(result);
+    console.table(result);
+  };
+  $('#debugRevealTest').onclick = () => {
+    const beauty = analyzeNumber('А777АА 77');
+    reveal({ id: `debug_${Date.now()}`, country: 'russia', region: 'Москва (77)', type: 'civil', rarity: 'epic', value: 900000, combination: 'А777АА 77', style: getPlateStyle('russia'), description: beauty.description, additionalFeatures: beauty.additionalFeatures, beauty });
+    setDebugOutput('Тестовый эпический экран открыт. Этот предмет не добавлен в коллекцию и не изменяет баланс.');
+  };
+  $('#debugStorage').onclick = debugStorageDiagnostics;
+  $('#debugStateAudit').onclick = runStateAudit;
+  $('#debugClearOutput').onclick = () => setDebugOutput('Вывод очищен.');
+}
+
+// Inject hidden developer pages after the original interface is rendered.
+document.addEventListener('DOMContentLoaded', () => {
+  injectAdminDebugPages();
 });
